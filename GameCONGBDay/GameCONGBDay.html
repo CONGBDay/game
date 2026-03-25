@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<title>Game Idol Merge</title>
+<style>
+  body {
+    margin: 0;
+    overflow: hidden;
+    background: #111;
+  }
+  canvas {
+    display: block;
+    margin: auto;
+    background: #222;
+  }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<script>
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+
+// 🔥 THU NHỎ MÀN HÌNH
+//canvas.width = 300;
+//canvas.height = 500;
+
+const GRAVITY = 0.5;
+const SCALE = 1.2; // 🔥 giảm lại cho hợp màn nhỏ
+
+let balls = [];
+let gameOver = false;
+
+const images = [
+ "CONGB.1.jpg",
+  "CONGB.10.jpg",
+  "CONGB.2.jpg",
+  "CONGB.3.jpg",
+  "CONGB.4.jpg",
+ "CONGB.5.jpg",
+  "CONGB.6.jpg",
+  "CONGB.7.jpg"
+];
+
+class Ball {
+  constructor(x, y, level) {
+    this.x = x;
+    this.y = y;
+    this.radius = (20 + level * 10) * SCALE;
+    this.level = level;
+
+    this.vy = 0;
+    this.stable = false; // 🔥 thêm
+
+    this.img = new Image();
+    this.img.src = images[level % images.length];
+  }
+
+  update() {
+  if (this.stable) return;
+
+  this.vy += GRAVITY;
+  this.y += this.vy;
+
+  // 🔥 CHỐNG XUYÊN SÀN
+  if (this.y + this.radius >= canvas.height) {
+    this.y = canvas.height - this.radius; // khóa vị trí
+    this.vy = 0;
+
+    // 🔥 đứng luôn, không cho trôi tiếp
+    this.stable = true;
+  }
+}
+  draw() {
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+    ctx.clip();
+    ctx.drawImage(this.img, this.x - this.radius, this.y - this.radius, this.radius * 2, this.radius * 2);
+    ctx.restore();
+  }
+}
+
+let currentBall = new Ball(canvas.width / 2, 50, 0);
+
+canvas.addEventListener("mousemove", (e) => {
+  if (!gameOver) {
+    const rect = canvas.getBoundingClientRect();
+    currentBall.x = e.clientX - rect.left;
+  }
+});
+
+canvas.addEventListener("click", () => {
+  if (gameOver) return;
+
+  balls.push(currentBall);
+  currentBall = new Ball(canvas.width / 2, 50, 0);
+});
+
+function checkMerge() {
+  for (let i = 0; i < balls.length; i++) {
+    for (let j = i + 1; j < balls.length; j++) {
+      let b1 = balls[i];
+      let b2 = balls[j];
+
+      let dx = b1.x - b2.x;
+      let dy = b1.y - b2.y;
+      let dist = Math.sqrt(dx * dx + dy * dy);
+
+      if (dist < b1.radius + b2.radius && b1.level === b2.level) {
+        let newBall = new Ball(
+          (b1.x + b2.x) / 2,
+          (b1.y + b2.y) / 2,
+          b1.level + 1
+        );
+        newBall.stable = false; 
+        balls.splice(j, 1);
+        balls.splice(i, 1);
+        balls.push(newBall);
+
+        if (newBall.level >= 7) {
+          alert("🎉 Bạn thắng!");
+          gameOver = true;
+        }
+
+        return;
+      }
+    }
+  }
+}
+
+function checkGameOver() {
+  for (let b of balls) {
+    if (b.y - b.radius <= 0) {
+      gameOver = true;
+      alert("💀 Game Over!");
+      return;
+    }
+  }
+}
+function resolveCollision() {
+  for (let i = 0; i < balls.length; i++) {
+    for (let j = i + 1; j < balls.length; j++) {
+
+      let b1 = balls[i];
+      let b2 = balls[j];
+
+      let dx = b2.x - b1.x;
+      let dy = b2.y - b1.y;
+      let dist = Math.sqrt(dx * dx + dy * dy);
+
+      let minDist = b1.radius + b2.radius;
+
+      if (dist < minDist && dist > 0) {
+
+        let overlap = minDist - dist;
+        let nx = dx / dist;
+        let ny = dy / dist;
+
+        // 🔥 đẩy rất nhẹ thôi (không văng lung tung)
+        let push = overlap * 0.3;
+
+        b1.x -= nx * push;
+        b1.y -= ny * push;
+        b2.x += nx * push;
+        b2.y += ny * push;
+
+        // 🔥 nếu gần đứng yên thì cho đứng luôn
+        if (Math.abs(b1.vy) < 0.5) b1.stable = true;
+        if (Math.abs(b2.vy) < 0.5) b2.stable = true;
+      }
+    }
+  }
+}
+function keepInBounds(ball) {
+  // chặn trái
+  if (ball.x - ball.radius < 0) {
+    ball.x = ball.radius;
+  }
+
+  // chặn phải
+  if (ball.x + ball.radius > canvas.width) {
+    ball.x = canvas.width - ball.radius;
+  }
+}
+function gameLoop() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  if (!gameOver) {
+    currentBall.draw();
+  }
+
+  balls.forEach(b => {
+  b.update();
+
+  // 🔥 khóa đáy lần nữa (backup chống bug)
+  if (b.y + b.radius > canvas.height) {
+    b.y = canvas.height - b.radius;
+    b.vy = 0;
+    b.stable = true;
+  }
+
+  keepInBounds(b);
+  b.draw();
+});
+  resolveCollision();
+  balls.forEach(b => {
+  if (b.y + b.radius > canvas.height) {
+    b.y = canvas.height - b.radius;
+    b.vy = 0;
+    b.stable = true;
+  }
+});
+  //balls.forEach(b => keepInBounds(b));
+  checkMerge();
+  checkGameOver();
+
+  requestAnimationFrame(gameLoop);
+}
+
+gameLoop();
+</script>
+</body>
+</html>
